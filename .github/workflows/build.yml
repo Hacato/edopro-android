@@ -1,7 +1,143 @@
 name: Build Realm of Kings Android
 
 on:
+  push:name: Build Realm of Kings Android
+
+on:
   push:
+  pull_request:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-24.04
+
+    env:
+      OS_NAME: linux
+
+      LIBWINDBOT_URL: https://github.com/ProjectIgnis/windbot/releases/download/20250412/libWindbot.aar
+      LIBWINDBOT_RESOURCES: https://github.com/ProjectIgnis/windbot/releases/download/20250412/WindBotIgnite-Resources.7z
+
+      COVERS_URL: ${{ secrets.COVERS_URL }}
+      FIELDS_URL: ${{ secrets.FIELDS_URL }}
+      PICS_URL: ${{ secrets.PICS_URL }}
+
+      # Realm of Kings automatic updater
+      UPDATE_URL: https://appealing-joy-production-bc20.up.railway.app/client-update
+
+      USE_BUNDLED_FONT: 1
+
+    steps:
+      - name: Checkout Android project
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      # Build against the current Realm of Kings EDOPro engine.
+      - name: Update Realm EDOPro engine
+        shell: bash
+        run: |
+          git -C deps/edopro fetch origin master --depth=1
+          git -C deps/edopro checkout --detach FETCH_HEAD
+          git -C deps/edopro submodule update --init --recursive
+
+          REALM_ENGINE_SHA="$(git -C deps/edopro rev-parse HEAD)"
+          echo "REALM_BUILD_COMMIT=$REALM_ENGINE_SHA" >> "$GITHUB_ENV"
+
+          echo "Realm EDOPro engine commit: $REALM_ENGINE_SHA"
+
+      - name: Install apt deps
+        run: |
+          sudo apt install lua5.3
+
+      - name: Download libwindbot
+        run: |
+          mkdir -p libs
+          curl --retry 5 --connect-timeout 30 --location --remote-header-name \
+            -o libs/libWindbot.aar "$LIBWINDBOT_URL"
+
+      - name: Set local.properties
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          echo "org.gradle.jvmargs=-Xmx8192M" >> gradle.properties
+
+      - name: Prepare assets
+        run: |
+          ./ci/touch-assets.sh
+
+      - name: Build Realm client
+        run: ./ci/build-android.sh
+
+      - name: Build unsigned APK
+        shell: bash
+        run: |
+          ./gradlew assemble
+
+      # Reconstruct the permanent Realm signing key from GitHub Secrets.
+      # certutil-generated Base64 contains BEGIN/END CERTIFICATE markers,
+      # so remove those before decoding.
+      - name: Restore Realm signing key
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s\n' "$KEYSTORE_BASE64" \
+            | sed '/-----BEGIN CERTIFICATE-----/d; /-----END CERTIFICATE-----/d' \
+            | tr -d '\r\n' \
+            | base64 --decode \
+            > realm-of-kings.jks
+
+          test -s realm-of-kings.jks
+
+          echo "Realm signing key restored successfully."
+
+      - name: Sign Realm APK
+        shell: bash
+        env:
+          JKS_PASS: ${{ secrets.REALM_JKS_PASS }}
+        run: |
+          BUILD_TOOLS_PATH="$ANDROID_HOME/build-tools/36.0.0"
+
+          mkdir -p release
+
+          "$BUILD_TOOLS_PATH/zipalign" \
+            -v \
+            -p \
+            4 \
+            build/outputs/apk/release/EDOPro-release-unsigned.apk \
+            release/Realm-of-Kings-Android-aligned.apk
+
+          "$BUILD_TOOLS_PATH/apksigner" sign \
+            --ks realm-of-kings.jks \
+            --ks-key-alias realm-of-kings \
+            --ks-pass env:JKS_PASS \
+            --key-pass env:JKS_PASS \
+            --out release/Realm-of-Kings-Android.apk \
+            release/Realm-of-Kings-Android-aligned.apk
+
+      - name: Verify signed Realm APK
+        shell: bash
+        run: |
+          BUILD_TOOLS_PATH="$ANDROID_HOME/build-tools/36.0.0"
+
+          "$BUILD_TOOLS_PATH/apksigner" verify \
+            --verbose \
+            --print-certs \
+            release/Realm-of-Kings-Android.apk
+
+      - name: Remove temporary signing material
+        if: always()
+        shell: bash
+        run: |
+          rm -f realm-of-kings.jks
+          rm -f release/Realm-of-Kings-Android-aligned.apk
+
+      - name: Upload signed Realm APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Realm-of-Kings-Android
+          path: release/Realm-of-Kings-Android.apk
+          if-no-files-found: error
   pull_request:
 
 jobs:
