@@ -50,9 +50,14 @@ ifneq ($(UPDATE_URL),)
 LOCAL_CFLAGS += -DUPDATE_URL=\"$(UPDATE_URL)\"
 endif
 
+ifneq ($(REALM_BUILD_COMMIT),)
+LOCAL_CFLAGS += -DREALM_BUILD_COMMIT=\"$(REALM_BUILD_COMMIT)\"
+endif
+
 CLASSES_PATH := $(LOCAL_PATH)/deps
 EABI_CLASSES_PATH := $(LOCAL_PATH)/deps-armeabi
 GFRAME_PATH := $(CLASSES_PATH)/edopro/gframe
+
 LOCAL_C_INCLUDES := $(GFRAME_PATH)/CGUICustomContextMenu \
 					$(GFRAME_PATH)/CGUICustomTabControl \
 					$(GFRAME_PATH)/CGUICustomText \
