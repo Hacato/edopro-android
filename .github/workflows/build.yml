@@ -1,9 +1,6 @@
 name: Build Realm of Kings Android
 
 on:
-  push:name: Build Realm of Kings Android
-
-on:
   push:
   pull_request:
 
@@ -73,9 +70,6 @@ jobs:
         run: |
           ./gradlew assemble
 
-      # Reconstruct the permanent Realm signing key from GitHub Secrets.
-      # certutil-generated Base64 contains BEGIN/END CERTIFICATE markers,
-      # so remove those before decoding.
       - name: Restore Realm signing key
         shell: bash
         env:
@@ -138,87 +132,3 @@ jobs:
           name: Realm-of-Kings-Android
           path: release/Realm-of-Kings-Android.apk
           if-no-files-found: error
-  pull_request:
-
-jobs:
-  build-apk:
-    runs-on: ubuntu-24.04
-
-    env:
-      OS_NAME: linux
-
-      LIBWINDBOT_URL: https://github.com/ProjectIgnis/windbot/releases/download/20250412/libWindbot.aar
-      LIBWINDBOT_RESOURCES: https://github.com/ProjectIgnis/windbot/releases/download/20250412/WindBotIgnite-Resources.7z
-
-      COVERS_URL: ${{ secrets.COVERS_URL }}
-      FIELDS_URL: ${{ secrets.FIELDS_URL }}
-      PICS_URL: ${{ secrets.PICS_URL }}
-
-      # Realm of Kings automatic updater
-      UPDATE_URL: https://appealing-joy-production-bc20.up.railway.app/client-update
-
-      USE_BUNDLED_FONT: 1
-
-    steps:
-      - name: Checkout Android project
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          submodules: recursive
-
-      # The Android repository pins EDOPro as a submodule.
-      # Realm Android should build the current Realm engine rather
-      # than the old upstream-pinned EDOPro commit.
-      - name: Update Realm EDOPro engine
-        shell: bash
-        run: |
-          git -C deps/edopro fetch origin master --depth=1
-          git -C deps/edopro checkout --detach FETCH_HEAD
-          git -C deps/edopro submodule update --init --recursive
-
-          REALM_ENGINE_SHA="$(git -C deps/edopro rev-parse HEAD)"
-          echo "REALM_BUILD_COMMIT=$REALM_ENGINE_SHA" >> "$GITHUB_ENV"
-
-          echo "Realm EDOPro engine commit: $REALM_ENGINE_SHA"
-
-      - name: Install apt deps
-        run: |
-          sudo apt install lua5.3
-
-      - name: Download libwindbot
-        run: |
-          mkdir -p libs
-          curl --retry 5 --connect-timeout 30 --location --remote-header-name \
-            -o libs/libWindbot.aar "$LIBWINDBOT_URL"
-
-      - name: Set local.properties
-        run: |
-          echo "sdk.dir=$ANDROID_HOME" > local.properties
-          echo "org.gradle.jvmargs=-Xmx8192M" >> gradle.properties
-
-      - name: Prepare assets
-        run: |
-          ./ci/touch-assets.sh
-
-      - name: Build Realm client
-        run: ./ci/build-android.sh
-
-      # Build the APK but intentionally do not sign it yet.
-      # Realm of Kings will receive its own permanent signing key
-      # before Android distribution is enabled.
-      - name: Build unsigned APK
-        shell: bash
-        run: |
-          ./gradlew assemble
-
-          mkdir -p release
-
-          cp \
-            build/outputs/apk/release/EDOPro-release-unsigned.apk \
-            release/Realm-of-Kings-Android-unsigned.apk
-
-      - name: Upload unsigned build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Realm-of-Kings-Android-unsigned
-          path: release/Realm-of-Kings-Android-unsigned.apk
