@@ -34,7 +34,11 @@ android {
 		versionName "41.0.2"
 		minSdkVersion 16
 		targetSdkVersion 36
-		applicationId "io.github.edo9300.edopro"
+
+		// Realm of Kings has its own Android application identity.
+		// This allows it to coexist with the official EDOPro Android app.
+		applicationId "io.github.hacato.realmofkings"
+
 		manifestPlaceholders = [project: project.name]
 		ndk {
 			//noinspection ChromeOsAbiSupport
@@ -50,7 +54,11 @@ android {
 
 
 	Properties props = new Properties()
+
+	// Keep the existing Java/Kotlin namespace.
+	// The installable Android application ID is Realm-specific above.
 	namespace = 'io.github.edo9300.edopro'
+
 	androidResources {
 		ignoreAssetsPattern = '!.svn:!.git:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*.scc:*~'
 		noCompress += ['dll', 'config']
@@ -83,7 +91,6 @@ dependencies {
 	implementation 'androidx.appcompat:appcompat:1.6.1'
 	//noinspection GradleDependency
 	implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.1.0'
-	//noinspection GradleDependency
 	implementation "androidx.documentfile:documentfile:1.0.1"
 	implementation(files("libs/libWindbot.aar"))
 }
