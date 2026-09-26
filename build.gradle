@@ -30,7 +30,7 @@ android {
 	compileSdk = 36
 
 	defaultConfig {
-		versionCode 21
+		versionCode (1000 + Integer.parseInt(System.getenv("REALM_VERSION_CODE") ?: "1"))
 		versionName "41.0.2"
 		minSdkVersion 16
 		targetSdkVersion 36
@@ -39,7 +39,7 @@ android {
 		// This allows it to coexist with the official EDOPro Android app.
 		applicationId "io.github.hacato.realmofkings"
 
-		manifestPlaceholders = [project: project.name]
+		manifestPlaceholders = [project: "Realm of Kings"]
 		ndk {
 			//noinspection ChromeOsAbiSupport
 			abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86'//, 'x86_64'
