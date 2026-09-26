@@ -3,6 +3,7 @@ name: Build Realm of Kings Android
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build-apk:
@@ -18,8 +19,10 @@ jobs:
       FIELDS_URL: ${{ secrets.FIELDS_URL }}
       PICS_URL: ${{ secrets.PICS_URL }}
 
-      # Realm of Kings automatic updater
-      UPDATE_URL: https://appealing-joy-production-bc20.up.railway.app/client-update
+      # Engine updates are installed as signed APKs. Never use the Windows endpoint.
+      UPDATE_URL: ""
+      REALM_VERSION_CODE: ${{ github.run_number }}
+      REALM_ENGINE_REF: 45ba8798e6ebc3459734b639445dfbaf488735be
 
       USE_BUNDLED_FONT: 1
 
@@ -34,7 +37,7 @@ jobs:
       - name: Update Realm EDOPro engine
         shell: bash
         run: |
-          git -C deps/edopro fetch origin master --depth=1
+          git -C deps/edopro fetch origin "$REALM_ENGINE_REF" --depth=1
           git -C deps/edopro checkout --detach FETCH_HEAD
           git -C deps/edopro submodule update --init --recursive
 
@@ -43,14 +46,21 @@ jobs:
 
           echo "Realm EDOPro engine commit: $REALM_ENGINE_SHA"
 
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
       - name: Install apt deps
         run: |
-          sudo apt install lua5.3
+          sudo apt-get update
+          sudo apt-get install -y lua5.3 p7zip-full
 
       - name: Download libwindbot
         run: |
           mkdir -p libs
-          curl --retry 5 --connect-timeout 30 --location --remote-header-name \
+          curl --fail --retry 5 --connect-timeout 30 --location --remote-header-name \
             -o libs/libWindbot.aar "$LIBWINDBOT_URL"
 
       - name: Set local.properties
@@ -68,9 +78,10 @@ jobs:
       - name: Build unsigned APK
         shell: bash
         run: |
-          ./gradlew assemble
+          ./gradlew assembleRelease
 
       - name: Restore Realm signing key
+        if: github.event_name != 'pull_request'
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -86,6 +97,7 @@ jobs:
           echo "Realm signing key restored successfully."
 
       - name: Sign Realm APK
+        if: github.event_name != 'pull_request'
         shell: bash
         env:
           JKS_PASS: ${{ secrets.REALM_JKS_PASS }}
@@ -110,6 +122,7 @@ jobs:
             release/Realm-of-Kings-Android-aligned.apk
 
       - name: Verify signed Realm APK
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           BUILD_TOOLS_PATH="$ANDROID_HOME/build-tools/36.0.0"
@@ -127,6 +140,7 @@ jobs:
           rm -f release/Realm-of-Kings-Android-aligned.apk
 
       - name: Upload signed Realm APK
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: Realm-of-Kings-Android
